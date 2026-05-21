@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cima_mens/providers/settings_provider.dart';
 import 'package:cima_mens/providers/cycle_provider.dart';
-import 'package:cima_mens/providers/mood_provider.dart';
+
 
 import 'package:cima_mens/utils/constants.dart';
 import 'package:cima_mens/utils/export_utils.dart';
@@ -251,19 +251,6 @@ class SettingsScreen extends StatelessWidget {
             }
           },
         ),
-        const SizedBox(height: 10),
-        Divider(color: Colors.grey.shade100),
-        const SizedBox(height: 10),
-
-        // Reset data
-        _buildActionTile(
-          context: context,
-          icon: Icons.delete_forever_rounded,
-          title: 'Reset Data',
-          subtitle: 'Hapus semua data secara permanen',
-          color: Colors.red.shade300,
-          onTap: () => _confirmReset(context),
-        ),
       ],
     );
   }
@@ -347,60 +334,7 @@ class SettingsScreen extends StatelessWidget {
   }
 
   /// Dialog konfirmasi reset
-  void _confirmReset(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Row(
-            children: [
-              Icon(Icons.warning_amber_rounded,
-                  color: Colors.red.shade400, size: 28),
-              const SizedBox(width: 10),
-              const Text('Reset Data?'),
-            ],
-          ),
-          content: const Text(
-            'Semua data siklus, mood, dan pengaturan akan dihapus secara permanen.\n\nTindakan ini tidak dapat dibatalkan!',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Batal'),
-            ),
-            TextButton(
-              onPressed: () async {
-                Navigator.of(ctx).pop();
-                // Removed Hive clear
-                if (context.mounted) {
-                  // Reload semua provider
-                  context.read<CycleProvider>().loadCycles();
-                  context.read<MoodProvider>().loadEntries();
-                  context.read<SettingsProvider>().loadSettings();
 
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content:
-                          const Text('Semua data berhasil dihapus'),
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                    ),
-                  );
-                }
-              },
-              child: Text(
-                'Hapus Semua',
-                style: TextStyle(color: Colors.red.shade400),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
 
   /// Kartu Tentang FlowMate
   Widget _buildAboutCard(BuildContext context, Color primaryColor) {
