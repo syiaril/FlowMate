@@ -52,11 +52,26 @@ class SupabaseService {
   // Moods & Symptoms
   // ---------------------------------------------------------------------------
 
+  Future<List<Map<String, dynamic>>> getImageMoods() async {
+    try {
+      final response = await _supabase
+          .from('image_moods')
+          .select()
+          .order('name');
+      return (response as List<dynamic>)
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    } catch (e) {
+      print('Error fetching image moods: $e');
+      return [];
+    }
+  }
+
   Future<List<MoodEntry>> getMoods() async {
     try {
       final response = await _supabase
           .from('moods')
-          .select('*, symptoms(*)')
+          .select('*, symptoms(*), image_moods(*)')
           .order('created_at', ascending: false);
 
       final moods = (response as List<dynamic>)

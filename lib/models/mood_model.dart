@@ -3,9 +3,10 @@ class MoodEntry {
   final String id;
   final String userId;
   final DateTime date; // Extracted from created_at in Supabase
-  final String mood;
+  final String? imageMoodId; // References image_moods.id
+  final String mood; // Hold the mood name/label (e.g. 'Senang')
+  final String? imageUrl; // Hold the mood image URL (e.g. 'https://...')
   final String? note;
-  final String? imageUrl;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   
@@ -19,6 +20,7 @@ class MoodEntry {
     required this.userId,
     required this.date,
     required this.mood,
+    this.imageMoodId,
     this.symptoms = const [],
     this.note,
     this.imageUrl,
@@ -30,6 +32,7 @@ class MoodEntry {
     String? id,
     String? userId,
     DateTime? date,
+    String? imageMoodId,
     String? mood,
     List<String>? symptoms,
     String? note,
@@ -41,6 +44,7 @@ class MoodEntry {
       id: id ?? this.id,
       userId: userId ?? this.userId,
       date: date ?? this.date,
+      imageMoodId: imageMoodId ?? this.imageMoodId,
       mood: mood ?? this.mood,
       symptoms: symptoms ?? this.symptoms,
       note: note ?? this.note,
@@ -55,6 +59,7 @@ class MoodEntry {
       'id': id,
       'user_id': userId,
       'mood': mood,
+      if (imageMoodId != null) 'image_mood_id': imageMoodId,
       if (note != null) 'note': note,
       if (imageUrl != null) 'image_url': imageUrl,
     };
@@ -63,26 +68,35 @@ class MoodEntry {
   /// For insert: exclude id, user_id, created_at, updated_at (let DB defaults handle them)
   Map<String, dynamic> toInsertJson() {
     return {
-      'mood': mood,
+      if (imageMoodId != null) 'image_mood_id': imageMoodId,
       if (note != null) 'note': note,
-      if (imageUrl != null) 'image_url': imageUrl,
     };
   }
 
   factory MoodEntry.fromJson(Map<String, dynamic> json) {
+    // Handle join query on image_moods
+    final imageMoodObj = json['image_moods'] as Map<String, dynamic>?;
+    final String moodName = imageMoodObj != null
+        ? imageMoodObj['name'] as String
+        : (json['mood'] as String? ?? '');
+    final String? moodUrl = imageMoodObj != null
+        ? imageMoodObj['image_url'] as String?
+        : (json['image_url'] as String?);
+
     return MoodEntry(
       id: json['id'] as String,
       userId: json['user_id'] as String,
       // Treat created_at as the date of the mood log
       date: json['created_at'] != null ? DateTime.parse(json['created_at'] as String).toLocal() : DateTime.now(),
-      mood: json['mood'] as String,
+      imageMoodId: json['image_mood_id'] as String?,
+      mood: moodName,
       symptoms: json['symptoms'] != null
           ? (json['symptoms'] as List<dynamic>)
               .map((s) => s['symptom'] as String)
               .toList()
           : [],
       note: json['note'] as String?,
-      imageUrl: json['image_url'] as String?,
+      imageUrl: moodUrl,
       createdAt: json['created_at'] != null ? DateTime.parse(json['created_at'] as String).toLocal() : null,
       updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at'] as String).toLocal() : null,
     );

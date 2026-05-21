@@ -59,11 +59,21 @@ class _MoodScreenState extends State<MoodScreen> {
       return;
     }
 
+    final imageMoods = context.read<MoodProvider>().imageMoods;
+    final selectedMoodObj = imageMoods.firstWhere(
+      (m) => m['id'] == _selectedMood,
+      orElse: () => <String, dynamic>{},
+    );
+    final moodName = selectedMoodObj['name'] as String? ?? 'Biasa';
+    final moodUrl = selectedMoodObj['image_url'] as String?;
+
     final entry = MoodEntry(
       userId: 'offline_default', // Handled by Supabase auth if needed
       id: const Uuid().v4(),
       date: _selectedDate,
-      mood: _selectedMood!,
+      imageMoodId: _selectedMood,
+      mood: moodName,
+      imageUrl: moodUrl,
       symptoms: List<String>.from(_selectedSymptoms),
       note: _notesController.text.isNotEmpty ? _notesController.text : null,
     );
@@ -209,9 +219,9 @@ class _MoodScreenState extends State<MoodScreen> {
               icon: Icons.emoji_emotions_rounded,
               primaryColor: primaryColor,
               child: MoodEmojiPicker(
-                selectedMood: _selectedMood,
-                onSelected: (mood) {
-                  setState(() => _selectedMood = mood);
+                selectedMoodId: _selectedMood,
+                onSelected: (moodId) {
+                  setState(() => _selectedMood = moodId);
                 },
               ),
             ),
@@ -411,9 +421,11 @@ class _MoodScreenState extends State<MoodScreen> {
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              entry.mood.startsWith('http')
-                  ? Image.network(entry.mood, width: 36, height: 36, fit: BoxFit.contain)
-                  : Text(entry.mood, style: const TextStyle(fontSize: 32)),
+              (entry.imageUrl != null && entry.imageUrl!.isNotEmpty)
+                  ? Image.network(entry.imageUrl!, width: 36, height: 36, fit: BoxFit.contain)
+                  : (entry.mood.startsWith('http')
+                      ? Image.network(entry.mood, width: 36, height: 36, fit: BoxFit.contain)
+                      : Text(entry.mood, style: const TextStyle(fontSize: 32))),
               const SizedBox(height: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -440,6 +452,18 @@ class _MoodScreenState extends State<MoodScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Nama Mood
+                Text(
+                  (entry.mood.isNotEmpty && !entry.mood.startsWith('http'))
+                      ? entry.mood
+                      : 'Mood Terdeteksi',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade800,
+                  ),
+                ),
+                const SizedBox(height: 6),
                 if (entry.symptoms.isNotEmpty)
                   Wrap(
                     spacing: 4,

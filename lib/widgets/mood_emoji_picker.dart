@@ -1,31 +1,44 @@
 import 'package:flutter/material.dart';
-import 'package:cima_mens/utils/constants.dart';
+import 'package:provider/provider.dart';
+import 'package:cima_mens/providers/mood_provider.dart';
 
 /// MoodEmojiPicker — Deretan tombol emoji untuk memilih mood.
-/// Menggunakan kMoodList dari constants.dart.
+/// Menggunakan data image_moods dari database Supabase.
 class MoodEmojiPicker extends StatelessWidget {
-  final String? selectedMood;
+  final String? selectedMoodId;
   final Function(String) onSelected;
 
   const MoodEmojiPicker({
     super.key,
-    this.selectedMood,
+    this.selectedMoodId,
     required this.onSelected,
   });
 
   @override
   Widget build(BuildContext context) {
+    final imageMoods = context.watch<MoodProvider>().imageMoods;
+
+    if (imageMoods.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(16.0),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     return Wrap(
       spacing: 10,
       runSpacing: 10,
       alignment: WrapAlignment.center,
-      children: FlowMateConstants.moods.map((mood) {
-        final emoji = mood['emoji']!;
-        final label = mood['label']!;
-        final isSelected = selectedMood == emoji;
+      children: imageMoods.map((mood) {
+        final id = mood['id'] as String;
+        final emoji = mood['image_url'] as String;
+        final label = mood['name'] as String;
+        final isSelected = selectedMoodId == id;
 
         return GestureDetector(
-          onTap: () => onSelected(emoji),
+          onTap: () => onSelected(id),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 250),
             curve: Curves.easeInOut,

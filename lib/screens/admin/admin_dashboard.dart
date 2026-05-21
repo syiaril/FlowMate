@@ -142,9 +142,11 @@ class AdminDashboard extends StatelessWidget {
                                 // Mood Icon & Time
                                 Column(
                                   children: [
-                                    e.mood.startsWith('http')
-                                        ? Image.network(e.mood, width: 40, height: 40, fit: BoxFit.contain)
-                                        : Text(e.mood, style: const TextStyle(fontSize: 36)),
+                                    (e.imageUrl != null && e.imageUrl!.isNotEmpty)
+                                        ? Image.network(e.imageUrl!, width: 40, height: 40, fit: BoxFit.contain)
+                                        : (e.mood.startsWith('http')
+                                            ? Image.network(e.mood, width: 40, height: 40, fit: BoxFit.contain)
+                                            : Text(e.mood, style: const TextStyle(fontSize: 36))),
                                     const SizedBox(height: 8),
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -169,11 +171,21 @@ class AdminDashboard extends StatelessWidget {
                                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
                                           Text(
-                                            FlowDateUtils.formatDateShort(e.date),
+                                            (e.mood.isNotEmpty && !e.mood.startsWith('http'))
+                                                ? e.mood
+                                                : 'Mood Tercatat',
                                             style: TextStyle(
                                               fontWeight: FontWeight.bold,
-                                              color: Colors.grey.shade800,
-                                              fontSize: 14,
+                                              color: Colors.grey.shade900,
+                                              fontSize: 15,
+                                            ),
+                                          ),
+                                          Text(
+                                            FlowDateUtils.formatDateShort(e.date),
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w500,
+                                              color: Colors.grey.shade500,
+                                              fontSize: 12,
                                             ),
                                           ),
                                         ],
