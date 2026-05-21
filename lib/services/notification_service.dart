@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -45,16 +44,32 @@ class NotificationService {
 
     // Initialize timezone database
     tz.initializeTimeZones();
+
+    // Try to detect local timezone dynamically.
+    // flutter_timezone returns a TimezoneInfo object; we need .identifier.
     try {
-      final timezoneInfo = await FlutterTimezone.getLocalTimezone();
-      final String timeZoneName = timezoneInfo.identifier;
-      tz.setLocalLocation(tz.getLocation(timeZoneName));
-      debugPrint('[NotificationService] Timezone set successfully to: $timeZoneName');
+      // Use platform default timezone name from Dart
+      final timeZoneName = DateTime.now().timeZoneName;
+      // Try mapping common abbreviations to IANA names
+      final ianaName = _resolveTimezone(timeZoneName);
+      tz.setLocalLocation(tz.getLocation(ianaName));
+      debugPrint(
+          '[NotificationService] Timezone set to: $ianaName (from: $timeZoneName)');
     } catch (e) {
-      debugPrint('[NotificationService] Failed to set local timezone, defaulting to UTC: $e');
+      // Fallback: try to detect from UTC offset
+      try {
+        final offset = DateTime.now().timeZoneOffset;
+        final ianaName = _timezoneFromOffset(offset);
+        tz.setLocalLocation(tz.getLocation(ianaName));
+        debugPrint(
+            '[NotificationService] Timezone set from offset: $ianaName');
+      } catch (e2) {
+        debugPrint(
+            '[NotificationService] Failed to set timezone, using UTC: $e2');
+      }
     }
 
-    // Android settings
+    // Android settings — use default app icon
     const androidSettings = AndroidInitializationSettings(
       '@mipmap/launcher_icon',
     );
@@ -77,18 +92,83 @@ class NotificationService {
       onDidReceiveNotificationResponse: _onNotificationTapped,
     );
 
-    // Request permissions on Android 13+
-    await requestPermission();
-
     _initialized = true;
-    debugPrint('[NotificationService] Initialized successfully.');
+    debugPrint('[NotificationService] Plugin initialized.');
+
+    // Request permissions on Android 13+
+    final permGranted = await requestPermission();
+    debugPrint('[NotificationService] Permission granted: $permGranted');
+
+    // Request exact alarm permission on Android 12+
+    await _requestExactAlarmPermission();
 
     // Proactively schedule reminders
     try {
       await scheduleDailyMoodReminder();
       await scheduleMonthlyReminder();
+      debugPrint('[NotificationService] Default reminders scheduled.');
     } catch (e) {
-      debugPrint('[NotificationService] Error scheduling default reminders: $e');
+      debugPrint(
+          '[NotificationService] Error scheduling default reminders: $e');
+    }
+  }
+
+  /// Resolve timezone abbreviation to IANA name.
+  String _resolveTimezone(String tzName) {
+    // Common Indonesian / Asian timezone abbreviations
+    const Map<String, String> abbreviations = {
+      'WIB': 'Asia/Jakarta',
+      'WITA': 'Asia/Makassar',
+      'WIT': 'Asia/Jayapura',
+      'SGT': 'Asia/Singapore',
+      'ICT': 'Asia/Bangkok',
+      'JST': 'Asia/Tokyo',
+      'KST': 'Asia/Seoul',
+      'CST': 'Asia/Shanghai',
+      'IST': 'Asia/Kolkata',
+      'GMT': 'GMT',
+      'UTC': 'UTC',
+      'EST': 'America/New_York',
+      'PST': 'America/Los_Angeles',
+      'CET': 'Europe/Paris',
+    };
+
+    if (abbreviations.containsKey(tzName)) {
+      return abbreviations[tzName]!;
+    }
+
+    // Try using it directly (it might already be an IANA name)
+    try {
+      tz.getLocation(tzName);
+      return tzName;
+    } catch (_) {
+      // Fallback to offset-based detection
+      return _timezoneFromOffset(DateTime.now().timeZoneOffset);
+    }
+  }
+
+  /// Determine IANA timezone name from UTC offset.
+  String _timezoneFromOffset(Duration offset) {
+    final hours = offset.inHours;
+    switch (hours) {
+      case 7:
+        return 'Asia/Jakarta'; // WIB
+      case 8:
+        return 'Asia/Makassar'; // WITA
+      case 9:
+        return 'Asia/Jayapura'; // WIT
+      case 5:
+        return 'Asia/Kolkata';
+      case 0:
+        return 'UTC';
+      case -5:
+        return 'America/New_York';
+      case -8:
+        return 'America/Los_Angeles';
+      case 1:
+        return 'Europe/Paris';
+      default:
+        return 'UTC';
     }
   }
 
@@ -102,16 +182,39 @@ class NotificationService {
 
   /// Request notification permissions on Android 13+ (API 33+).
   Future<bool> requestPermission() async {
-    final androidPlugin =
-        _plugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >();
-    if (androidPlugin != null) {
-      final granted = await androidPlugin.requestNotificationsPermission();
-      debugPrint('[NotificationService] Android permission request result: $granted');
-      return granted ?? false;
+    try {
+      final androidPlugin =
+          _plugin.resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      if (androidPlugin != null) {
+        final granted = await androidPlugin.requestNotificationsPermission();
+        debugPrint(
+            '[NotificationService] Android notification permission: $granted');
+        return granted ?? false;
+      }
+    } catch (e) {
+      debugPrint('[NotificationService] Error requesting permission: $e');
     }
     return true;
+  }
+
+  /// Request exact alarm permission on Android 12+ (API 31+).
+  Future<void> _requestExactAlarmPermission() async {
+    try {
+      final androidPlugin =
+          _plugin.resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      if (androidPlugin != null) {
+        await androidPlugin.requestExactAlarmsPermission();
+        debugPrint(
+            '[NotificationService] Exact alarm permission requested.');
+      }
+    } catch (e) {
+      debugPrint(
+          '[NotificationService] Error requesting exact alarm permission: $e');
+    }
   }
 
   // ──────────────────────────────────────────────
@@ -123,9 +226,11 @@ class NotificationService {
         _channelId,
         _channelName,
         channelDescription: _channelDescription,
-        importance: Importance.high,
-        priority: Priority.high,
+        importance: Importance.max,
+        priority: Priority.max,
         showWhen: true,
+        playSound: true,
+        enableVibration: true,
         icon: '@mipmap/launcher_icon',
       );
 
@@ -136,15 +241,23 @@ class NotificationService {
 
   // ──────────────────────────────────────────────
 
-  Future<void> showNotification({required int id, required String title, required String body}) async {
+  /// Show an immediate notification (no scheduling).
+  Future<void> showNotification({
+    required int id,
+    required String title,
+    required String body,
+  }) async {
+    if (!_initialized) await init();
     await _plugin.show(
       id,
       title,
       body,
       _notificationDetails,
     );
+    debugPrint('[NotificationService] Showed immediate notification: $title');
   }
 
+  // ──────────────────────────────────────────────
   // Schedule: Period reminder
   // ──────────────────────────────────────────────
 
@@ -167,21 +280,24 @@ class NotificationService {
 
     final scheduledDate = tz.TZDateTime.from(reminderDate, tz.local);
 
-    await _plugin.zonedSchedule(
-      _periodReminderId,
-      'Pengingat Menstruasi 🩸',
-      'Perkiraan menstruasi kamu dimulai besok. Siapkan dirimu!',
-      scheduledDate,
-      _notificationDetails,
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      payload: 'period_reminder',
-    );
-
-    debugPrint(
-      '[NotificationService] Period reminder scheduled for $scheduledDate',
-    );
+    try {
+      await _plugin.zonedSchedule(
+        _periodReminderId,
+        'Pengingat Menstruasi 🩸',
+        'Perkiraan menstruasi kamu dimulai besok. Siapkan dirimu!',
+        scheduledDate,
+        _notificationDetails,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        payload: 'period_reminder',
+      );
+      debugPrint(
+        '[NotificationService] Period reminder scheduled for $scheduledDate',
+      );
+    } catch (e) {
+      debugPrint('[NotificationService] Error scheduling period reminder: $e');
+    }
   }
 
   // ──────────────────────────────────────────────
@@ -202,21 +318,25 @@ class NotificationService {
 
     final scheduledDate = tz.TZDateTime.from(nextFirst, tz.local);
 
-    await _plugin.zonedSchedule(
-      _monthlyReminderId,
-      'Catat Siklus Bulananmu 📝',
-      'Jangan lupa catat mood dan gejala kamu bulan ini!',
-      scheduledDate,
-      _notificationDetails,
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      payload: 'monthly_reminder',
-    );
-
-    debugPrint(
-      '[NotificationService] Monthly reminder scheduled for $scheduledDate',
-    );
+    try {
+      await _plugin.zonedSchedule(
+        _monthlyReminderId,
+        'Catat Siklus Bulananmu 📝',
+        'Jangan lupa catat mood dan gejala kamu bulan ini!',
+        scheduledDate,
+        _notificationDetails,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        payload: 'monthly_reminder',
+      );
+      debugPrint(
+        '[NotificationService] Monthly reminder scheduled for $scheduledDate',
+      );
+    } catch (e) {
+      debugPrint(
+          '[NotificationService] Error scheduling monthly reminder: $e');
+    }
   }
 
   // ──────────────────────────────────────────────
@@ -253,7 +373,6 @@ class NotificationService {
     if (!_initialized) await init();
 
     final now = DateTime.now();
-    // Schedule today at 20:00. If it's already past 20:00, zonedSchedule will automatically schedule it for tomorrow.
     var scheduledDate = DateTime(now.year, now.month, now.day, 20, 0);
     if (now.hour >= 20) {
       scheduledDate = scheduledDate.add(const Duration(days: 1));
@@ -261,45 +380,46 @@ class NotificationService {
 
     final scheduledTZDate = tz.TZDateTime.from(scheduledDate, tz.local);
 
-    await _plugin.zonedSchedule(
-      _dailyMoodReminderId,
-      'Bagaimana Mood Kamu Hari Ini? 🌟',
-      'Jangan lupa untuk meluangkan waktu sejenak mencatat mood dan gejalamu hari ini ya!',
-      scheduledTZDate,
-      _notificationDetails,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      matchDateTimeComponents: DateTimeComponents.time,
-      payload: 'daily_mood_reminder',
-    );
-
-    debugPrint(
-      '[NotificationService] Daily mood reminder scheduled for $scheduledTZDate (repeats daily)',
-    );
+    try {
+      await _plugin.zonedSchedule(
+        _dailyMoodReminderId,
+        'Bagaimana Mood Kamu Hari Ini? 🌟',
+        'Jangan lupa untuk meluangkan waktu sejenak mencatat mood dan gejalamu hari ini ya!',
+        scheduledTZDate,
+        _notificationDetails,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: DateTimeComponents.time,
+        payload: 'daily_mood_reminder',
+      );
+      debugPrint(
+        '[NotificationService] Daily mood reminder scheduled for $scheduledTZDate (repeats daily)',
+      );
+    } catch (e) {
+      debugPrint(
+          '[NotificationService] Error scheduling daily mood reminder: $e');
+    }
   }
 
-  /// Schedule a one-time test notification in 5 seconds for testing.
-  Future<void> scheduleTestNotification() async {
+  /// Show an immediate test notification (no scheduling delay).
+  /// This is the most reliable way to test if notifications work.
+  Future<void> showTestNotification() async {
     if (!_initialized) await init();
 
-    final scheduledDate = DateTime.now().add(const Duration(seconds: 5));
-    final scheduledTZDate = tz.TZDateTime.from(scheduledDate, tz.local);
-
-    await _plugin.zonedSchedule(
-      999, // Test notification ID
-      'Tes Pengingat Mood 🌟',
-      'Ini adalah simulasi pengingat harian: Bagaimana mood kamu hari ini?',
-      scheduledTZDate,
+    await _plugin.show(
+      999,
+      'Tes Notifikasi FlowMate ✅',
+      'Notifikasi berhasil! Pengingat mood harian akan aktif setiap jam 8 malam.',
       _notificationDetails,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      payload: 'test_reminder',
+      payload: 'test_notification',
     );
-    
-    debugPrint(
-      '[NotificationService] Test notification scheduled in 5 seconds at $scheduledTZDate',
-    );
+
+    debugPrint('[NotificationService] Immediate test notification shown.');
+  }
+
+  /// Get list of pending (scheduled) notifications for debugging.
+  Future<List<PendingNotificationRequest>> getPendingNotifications() async {
+    return await _plugin.pendingNotificationRequests();
   }
 }

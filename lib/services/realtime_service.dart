@@ -8,8 +8,9 @@ class RealtimeService {
 
   final SupabaseClient _supabase = Supabase.instance.client;
   RealtimeChannel? _moodChannel;
+  RealtimeChannel? _messageChannel;
 
-  /// Starts listening to real-time changes on the 'moods' table
+  /// Starts listening to real-time changes on the 'moods' table and 'partner_messages'
   void startListening(Function onUpdate) {
     if (_moodChannel != null) return;
 
@@ -23,8 +24,6 @@ class RealtimeService {
           final newMood = payload.newRecord['mood'] as String?;
           final userId = payload.newRecord['user_id'] as String?;
           
-          // Basic logic to prevent notifying self
-          // Ideally we check if we are the admin and the user_id belongs to the partner
           if (userId != null && userId != _supabase.auth.currentUser?.id) {
             NotificationService.instance.showNotification(
               id: payload.newRecord['id'].hashCode,
@@ -33,9 +32,27 @@ class RealtimeService {
             );
           }
         }
-        
-        // Notify listeners (providers) to fetch the latest data
         onUpdate();
+      },
+    )..subscribe();
+
+    _messageChannel = _supabase.channel('public:partner_messages').onPostgresChanges(
+      event: PostgresChangeEvent.insert,
+      schema: 'public',
+      table: 'partner_messages',
+      callback: (payload) {
+        final receiverId = payload.newRecord['receiver_id'] as String?;
+        final message = payload.newRecord['message'] as String?;
+        final currentUserId = _supabase.auth.currentUser?.id;
+
+        // Only show notification if I am the receiver
+        if (receiverId != null && receiverId == currentUserId && message != null) {
+          NotificationService.instance.showNotification(
+            id: payload.newRecord['id'].hashCode,
+            title: 'Pesan dari Partner 💌',
+            body: message,
+          );
+        }
       },
     )..subscribe();
   }
@@ -43,5 +60,7 @@ class RealtimeService {
   void stopListening() {
     _moodChannel?.unsubscribe();
     _moodChannel = null;
+    _messageChannel?.unsubscribe();
+    _messageChannel = null;
   }
 }

@@ -121,4 +121,24 @@ class SupabaseService {
       rethrow;
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // Partner Messages (Nudges)
+  // ---------------------------------------------------------------------------
+
+  Future<void> sendPartnerMessage(String receiverId, String message) async {
+    try {
+      final senderId = _supabase.auth.currentUser?.id;
+      if (senderId == null) return;
+
+      await _supabase.from('partner_messages').insert({
+        'sender_id': senderId,
+        'receiver_id': receiverId,
+        'message': message,
+      });
+    } catch (e) {
+      print('Error sending partner message: $e');
+      rethrow;
+    }
+  }
 }

@@ -1,10 +1,5 @@
-import 'dart:io';
-import 'package:csv/csv.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:cima_mens/providers/cycle_provider.dart';
 import 'package:cima_mens/widgets/cycle_card.dart';
 import 'package:cima_mens/screens/input_cycle_screen.dart';
@@ -16,60 +11,7 @@ import 'package:cima_mens/screens/cycle_graph_screen.dart';
 class HistoryScreen extends StatelessWidget {
   const HistoryScreen({super.key});
 
-  Future<void> _exportToCsv(BuildContext context, List<dynamic> cycles) async {
-    try {
-      if (cycles.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Tidak ada data siklus untuk diekspor.')),
-        );
-        return;
-      }
 
-      // Prepare headers
-      List<List<dynamic>> rows = [];
-      rows.add([
-        'Tanggal Mulai',
-        'Tanggal Selesai',
-        'Panjang Siklus (Hari)',
-        'Lama Haid (Hari)',
-        'Catatan'
-      ]);
-
-      // Add data rows
-      final dateFormat = DateFormat('yyyy-MM-dd');
-      for (var cycle in cycles) {
-        rows.add([
-          dateFormat.format(cycle.startDate),
-          cycle.endDate != null ? dateFormat.format(cycle.endDate!) : '-',
-          cycle.cycleLength,
-          cycle.periodLength,
-          cycle.notes ?? '',
-        ]);
-      }
-
-      // Convert to CSV string
-      String csvData = Csv().encode(rows);
-
-      // Save to temp directory
-      final directory = await getTemporaryDirectory();
-      final path = '${directory.path}/riwayat_siklus.csv';
-      final file = File(path);
-      await file.writeAsString(csvData);
-
-      // Share file
-      if (!context.mounted) return;
-      await Share.shareXFiles(
-        [XFile(path)],
-        text: 'Ini adalah ekspor data riwayat siklus saya.',
-      );
-
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal mengekspor data: $e')),
-      );
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -90,13 +32,6 @@ class HistoryScreen extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
-          // Tombol export CSV
-          if (cycles.isNotEmpty)
-            IconButton(
-              onPressed: () => _exportToCsv(context, cycles),
-              icon: Icon(Icons.download_rounded, color: primaryColor),
-              tooltip: 'Ekspor CSV',
-            ),
           // Tombol grafik
           if (cycles.length >= 2)
             IconButton(

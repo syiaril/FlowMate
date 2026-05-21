@@ -223,6 +223,7 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+
   /// Bagian data: ekspor & reset
   Widget _buildDataSection(BuildContext context, Color primaryColor) {
     return Column(
@@ -232,11 +233,12 @@ class SettingsScreen extends StatelessWidget {
           context: context,
           icon: Icons.upload_file_rounded,
           title: 'Ekspor Data',
-          subtitle: 'Bagikan data dalam format JSON',
+          subtitle: 'Bagikan data dalam format CSV',
           color: const Color(0xFF64B5F6),
           onTap: () async {
             try {
-              await ExportUtils.shareData();
+              final cycles = context.read<CycleProvider>().cycles;
+              await ExportUtils.shareData(cycles);
             } catch (e) {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(

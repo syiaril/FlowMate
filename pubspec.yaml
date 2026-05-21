@@ -58,7 +58,6 @@ dependencies:
   uuid: ^4.3.3
   shared_preferences: ^2.5.5
   flutter_dotenv: ^6.0.1
-  flutter_timezone: ^5.0.2
   csv: ^8.0.0
 
 dev_dependencies:
