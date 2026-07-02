@@ -50,16 +50,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> login(String email, String password) async {
-    _isLoading = true;
-    notifyListeners();
-    try {
-      await _authService.login(email: email, password: password);
-    } catch (e) {
-      rethrow;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
+    await _authService.login(email: email, password: password);
   }
 
   Future<void> register(String email, String password, String name, String role) async {

@@ -88,7 +88,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
-        title: const Text('Masuk'),
+        title: const Text('Masukk'),
         centerTitle: true,
         elevation: 0,
       ),
